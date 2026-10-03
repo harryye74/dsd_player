@@ -1,6 +1,7 @@
 package com.audiophile.dsd_player
 
 import android.content.Context
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import jcifs.CIFSContext
 import jcifs.context.SingletonContext
@@ -19,7 +20,7 @@ class SmbPlugin(private val context: Context) : MethodChannel.MethodCallHandler 
     private var ctx: CIFSContext? = null
     private var baseUrl: String = ""
 
-    override fun onMethodCall(call: MethodChannel.MethodCall, result: MethodChannel.Result) {
+    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
                 "connect" -> {

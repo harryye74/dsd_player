@@ -1,6 +1,7 @@
 package com.audiophile.dsd_player
 
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import com.audiophile.dsd_player.audio.DsdAudioEngine
 
@@ -24,7 +25,7 @@ class DsdPlugin : MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
         }
     }
 
-    override fun onMethodCall(call: MethodChannel.MethodCall, result: MethodChannel.Result) {
+    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "isSupported" -> result.success(engine.isSupported())
             "load" -> {
