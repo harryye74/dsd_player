@@ -33,10 +33,16 @@ class ConnectionsPage extends StatelessWidget {
                 child: ListTile(
                   leading: const Icon(Icons.storage, color: Colors.lightBlue),
                   title: Text(c.name),
-                  subtitle: Text('smb://${c.host}:${c.port}/${c.share}'),
+                  subtitle: Text('smb://${c.host}:${c.port}/${c.share}  用户：${c.username.isEmpty ? '匿名' : c.username}'),
+                  onTap: () => _test(context, c),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        icon: const Icon(Icons.wifi_find, color: Colors.greenAccent),
+                        tooltip: '测试连接',
+                        onPressed: () => _test(context, c),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.white54),
                         onPressed: () => _showForm(context, c),
@@ -72,6 +78,31 @@ class ConnectionsPage extends StatelessWidget {
       context: context,
       builder: (_) => _ConnectionForm(existing: existing),
     );
+  }
+
+  /// 只验证连通性，不进入浏览页；把底层错误原文弹出来便于排查
+  Future<void> _test(BuildContext context, SmbConnection c) async {
+    final smb = context.read<SmbManager>();
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('正在测试 SMB 连接…'),
+      duration: Duration(seconds: 15),
+    ));
+    final sw = Stopwatch()..start();
+    try {
+      await smb.openSmb(c);
+      sw.stop();
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('连接成功（${sw.elapsedMilliseconds} ms）：${c.host}/${c.share}'),
+        duration: const Duration(seconds: 6),
+      ));
+    } catch (e) {
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('连接失败：$e'),
+        duration: const Duration(seconds: 15),
+      ));
+    }
   }
 }
 
@@ -113,17 +144,27 @@ class _ConnectionFormState extends State<_ConnectionForm> {
       content: SingleChildScrollView(
         child: Form(
           key: _form,
-          child: Column(
-            children: [
-              _field(_name, '名称', '家庭 NAS'),
-              _field(_host, '主机 IP / 域名', '192.168.1.100'),
-              _field(_port, '端口', '445', number: true),
-              _field(_share, '共享名', 'Music'),
-              _field(_domain, '域 / 工作组（可选）', 'WORKGROUP'),
-              _field(_user, '用户名', 'guest'),
-              _field(_pass, '密码', 'password', password: true),
-            ],
-          ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '端口留空即用 SMB 默认 445；共享名填 NAS 上创建的共享名（如 Music），'
+                    '不要填 /volume1/Music 这类路径。主机建议直接填 IP。',
+                    style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.4),
+                  ),
+                ),
+                _field(_name, '名称', '家庭 NAS'),
+                _field(_host, '主机 IP（推荐）/ 域名', '192.168.1.100'),
+                _field(_port, '端口（留空 = 445）', '445',
+                    number: true, optional: true),
+                _field(_share, '共享名', 'Music'),
+                _field(_domain, '域 / 工作组（可留空）', 'WORKGROUP', optional: true),
+                _field(_user, '用户名（匿名可留空）', 'guest', optional: true),
+                _field(_pass, '密码', '', password: true),
+              ],
+            ),
         ),
       ),
       actions: [
@@ -136,7 +177,7 @@ class _ConnectionFormState extends State<_ConnectionForm> {
   }
 
   Widget _field(TextEditingController c, String label, String hint,
-      {bool password = false, bool number = false}) {
+      {bool password = false, bool number = false, bool optional = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: TextFormField(
@@ -144,9 +185,8 @@ class _ConnectionFormState extends State<_ConnectionForm> {
         obscureText: password,
         keyboardType: number ? TextInputType.number : TextInputType.text,
         decoration: InputDecoration(labelText: label, hintText: hint),
-        validator: (v) => (v == null || v.isEmpty) && !password
-            ? '必填'
-            : null,
+        validator: (v) =>
+            (v == null || v.isEmpty) && !password && !optional ? '必填' : null,
       ),
     );
   }
