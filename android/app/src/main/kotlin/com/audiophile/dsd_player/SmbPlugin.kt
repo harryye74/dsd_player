@@ -60,12 +60,16 @@ class SmbPlugin(private val context: Context) : MethodChannel.MethodCallHandler 
         }
     }
 
-    /** 构造 jcifs 上下文：放开 SMB1~SMB3.1.1，只用 DNS/广播解析，缩短超时 */
+    /** 构造 jcifs 上下文：限定 SMB2~SMB3.0.2，只用 DNS/广播解析，缩短超时 */
     private fun newContext(): CIFSContext {
         val p = Properties()
-        // 协议版本：默认只到 SMB2.1，这里放开到 SMB3.1.1
-        p.setProperty("jcifs.smb.client.minVersion", "SMB1")
-        p.setProperty("jcifs.smb.client.maxVersion", "SMB311")
+        // 协议版本：下限 SMB202、上限 SMB302，刻意避开两端，理由如下——
+        //  · SMB1 用 OEM(Cp850) 编码，中文共享名（如"家庭共享")在 SMB1 下会乱码导致找不到共享；
+        //  · SMB3.1.1 要求客户端带 negotiate contexts，一旦把 3.1.1 放进方言列表，
+        //    部分 NAS（实测联想 MemoSpace）直接返回 0xC000000D 而不是降级到 3.0.2，整条连接失败。
+        // SMB2/SMB3 全程 UTF-16，中文共享名安全。
+        p.setProperty("jcifs.smb.client.minVersion", "SMB202")
+        p.setProperty("jcifs.smb.client.maxVersion", "SMB302")
         // 名称解析：WINS / LMHOSTS 在 Android 上基本不可用，只留 DNS + 广播
         p.setProperty("jcifs.resolveOrder", "DNS,BCAST")
         // 超时（毫秒）：默认 30s 太长，手机上等不起
@@ -85,8 +89,12 @@ class SmbPlugin(private val context: Context) : MethodChannel.MethodCallHandler 
         if (host.isEmpty()) return false
         // 端口留空 / 0 / 负数 -> 使用 SMB 默认 445（jcifs 会省略 :port）
         val port = (conn["port"] as? Number)?.toInt() ?: 0
-        val share = (conn["share"] as? String)?.trim()?.trim('/', '\\')
-        if (share.isNullOrEmpty()) return false
+        // 共享名允许带子目录，例如 "家庭共享/Music"，直接定位到音乐目录
+        val shareRaw = (conn["share"] as? String)?.trim()?.trim('/', '\\') ?: ""
+        if (shareRaw.isEmpty()) return false
+        val parts = shareRaw.split('/').filter { it.isNotBlank() }
+        val share = parts.first()
+        val subPath = parts.drop(1).joinToString("/")
         val user = conn["username"] as? String ?: ""
         val pass = conn["password"] as? String ?: ""
         val domain = conn["domain"] as? String ?: ""
@@ -94,7 +102,8 @@ class SmbPlugin(private val context: Context) : MethodChannel.MethodCallHandler 
         val auth = NtlmPasswordAuthenticator(domain, user, pass)
         val base = newContext().withCredentials(auth)
         val hostPart = if (port > 0) "$host:$port" else host
-        baseUrl = "smb://$hostPart/$share/"
+        baseUrl = "smb://$hostPart/$share/" +
+            (if (subPath.isEmpty()) "" else "$subPath/")
         // 校验：尝试列举共享根目录
         val root = SmbFile(baseUrl, base)
         root.listFiles()
@@ -153,7 +162,7 @@ class SmbPlugin(private val context: Context) : MethodChannel.MethodCallHandler 
             is SmbAuthException ->
                 "登录被拒：$raw。检查用户名 / 密码 / 域；匿名共享请把用户名留空或填 guest。"
             is JcifsSmbException ->
-                "SMB 错误：$raw。常见是共享名填错——应填共享名（如 Music），不要填路径或 IP。"
+                "SMB 错误：$raw。最常见是共享名填错：应填 NAS 上真实的共享名，可用「共享名/子目录」（如 家庭共享/Music）。"
             else -> "${e.javaClass.simpleName}: $raw"
         }
     }

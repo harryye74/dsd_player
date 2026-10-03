@@ -150,8 +150,8 @@ class _ConnectionFormState extends State<_ConnectionForm> {
                 const Padding(
                   padding: EdgeInsets.only(bottom: 8),
                   child: Text(
-                    '端口留空即用 SMB 默认 445；共享名填 NAS 上创建的共享名（如 Music），'
-                    '不要填 /volume1/Music 这类路径。主机建议直接填 IP。',
+                    '端口留空即用 SMB 默认 445。共享名填 NAS 上真实的共享名，'
+                    '可带子目录，如 家庭共享/Music。主机建议直接填 IP。',
                     style: TextStyle(color: Colors.white54, fontSize: 11, height: 1.4),
                   ),
                 ),
