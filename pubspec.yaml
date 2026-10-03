@@ -1,0 +1,34 @@
+name: dsd_player
+description: 无损 / DSD 比特完美 / SMB 网盘音乐播放器（Android & 鸿蒙 OHOS）
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=2.17.0 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+
+  # 状态管理
+  provider: ^6.0.2
+  # 无损 / 基础播放引擎（Android 原生解码 FLAC/ALAC/WAV/APE）
+  just_audio: ^0.9.34
+  # 权限（存储、网络）
+  permission_handler: ^10.2.0
+  # 本地演示用文件选择
+  file_picker: ^5.2.4
+  # 连接配置持久化
+  shared_preferences: ^2.0.15
+  # 路径
+  path_provider: ^2.0.11
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true

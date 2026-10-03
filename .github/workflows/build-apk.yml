@@ -1,0 +1,103 @@
+# GitHub Actions 云端自动构建 Android APK
+#
+# 用法（本机无需安装 Android SDK / Flutter）：
+# 1. 把本工程 git push 到你的 GitHub 仓库（默认分支 main 或 master）
+# 2. 打开仓库 Actions 标签页，首次需点 "I understand my workflows..." 启用 workflows
+# 3. 之后每次 push 到 main/master 自动构建；也可在 Actions 页手动 Run workflow
+# 4. 构建完成后，在该次运行记录的 Artifacts 区域下载 dsd-player-release-apk（即 app-release.apk）
+#
+# 关键约束（改动前请先读）：
+# - 必须用 JDK 11：本工程 AGP 7.1.2 + Gradle 7.4 官方只支持到 JDK 11，
+#   而 GitHub 的 ubuntu-latest 默认已是 JDK 17，会直接构建失败，故下面显式装 JDK 11。
+# - runner 固定 ubuntu-22.04：Flutter 3.0.0 属于老版本，在更新的 runner 镜像上有较高失败概率。
+# - 老版本 Flutter 在新版 git 下可能报 "detected dubious ownership"，故先声明 safe.directory。
+# - 构建步骤用 tee 落盘 build.log；失败时把日志末尾转成 annotation（无需登录即可诊断）并上传 artifact。
+
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:            # 允许在 Actions 页面手动触发
+    inputs:
+      flutter_version:
+        description: 'Flutter 版本；默认 3.0.0，若在 runner 上失败可试 3.7.12'
+        required: false
+        default: '3.0.0'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ github.event.inputs.flutter_version || '3.0.0' }}
+          channel: stable
+          cache: true
+
+      - name: 环境诊断
+        run: |
+          flutter --version
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "FLUTTER_ROOT=$FLUTTER_ROOT"
+          git config --global --add safe.directory "$FLUTTER_ROOT" || true
+          flutter doctor -v || true
+
+      - name: 获取依赖
+        run: flutter pub get
+
+      - name: 构建 Release APK
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee build.log
+
+      # ---- 失败诊断：把报错末尾写成 annotation，未登录也能读到 ----
+      - name: 构建失败诊断（日志注解）
+        if: failure()
+        run: |
+          if [ -f build.log ]; then
+            echo "===== build.log 末尾 200 行 ====="
+            tail -n 200 build.log
+            tail -n 160 build.log \
+              | sed -e 's/%/%25/g' -e 's/\r$//' \
+              | awk 'BEGIN{ORS="%0A"} {print}' \
+              | head -c 60000 > /tmp/msg.txt
+            printf '::error title=BUILD LOG TAIL::'
+            cat /tmp/msg.txt
+            echo
+          else
+            echo "build.log 不存在（构建在更早阶段就失败了）"
+          fi
+
+      - name: 上传 APK 产物
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsd-player-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 上传构建日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 14

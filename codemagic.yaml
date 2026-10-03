@@ -1,0 +1,45 @@
+# Codemagic 云端自动构建 Android APK（GitHub Actions 之外的备用方案）
+#
+# 用法（本机无需安装 Android SDK / Flutter）：
+# 1. 用 GitHub 账号登录 https://codemagic.io
+# 2. 关联包含本工程的仓库
+# 3. 构建配置选择仓库里的 codemagic.yaml
+# 4. 点 Start new build，等构建完成，在该次构建的 Artifacts 区域下载 app-release.apk
+#
+# 关键约束（改动前请先读）：
+# - environment 下只能写 Codemagic 支持的字段（flutter / java / xcode / node / ndk / ubuntu / cocoapods / ruby 等），
+#   写未知字段（例如 android: true）会被判为配置非法。
+# - java 必须指定 11：本工程 AGP 7.1.2 + Gradle 7.4 不兼容 JDK 17。
+# - instance_type 只能取 mac_mini_m2 / mac_mini_m4 / linux_x2 / linux_x4 / windows_x2；
+#   其中 mac_mini_m4、linux_x2、linux_x4、windows_x2 需要团队或已开通计费，免费版请用 mac_mini_m2。
+
+workflows:
+  build-android-apk:
+    name: DSD Player APK
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: 3.0.0
+      java: 11
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+    scripts:
+      - name: 环境诊断
+        script: |
+          flutter --version
+          java -version
+          flutter doctor -v || true
+      - name: 获取依赖
+        script: |
+          flutter pub get
+      - name: 构建 Release APK
+        script: |
+          flutter build apk --release
+    artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
+    # 如需构建完自动发邮件，取消下面注释并改成你的邮箱
+    # publishing:
+    #   email:
+    #     recipients:
+    #       - your@email.com
